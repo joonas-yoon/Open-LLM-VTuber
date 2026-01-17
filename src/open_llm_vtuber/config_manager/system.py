@@ -11,6 +11,7 @@ class SystemConfig(I18nMixin):
     host: str = Field(..., alias="host")
     port: int = Field(..., alias="port")
     config_alts_dir: str = Field(..., alias="config_alts_dir")
+    frontend_dir: str = Field("frontend", alias="frontend_dir")
     tool_prompts: Dict[str, str] = Field(..., alias="tool_prompts")
     enable_proxy: bool = Field(False, alias="enable_proxy")
 
@@ -21,6 +22,7 @@ class SystemConfig(I18nMixin):
         "config_alts_dir": Description(
             en="Directory for alternative configurations", zh="备用配置目录"
         ),
+        "frontend_dir": Description(en="Frontend directory", zh="前端目录"),
         "tool_prompts": Description(
             en="Tool prompts to be inserted into persona prompt",
             zh="要插入到角色提示词中的工具提示词",

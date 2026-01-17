@@ -144,7 +144,7 @@ class WebSocketServer:
         # Mount main frontend last (as catch-all)
         self.app.mount(
             "/",
-            CORSStaticFiles(directory="frontend", html=True),
+            CORSStaticFiles(directory=system_config.frontend_dir, html=True),
             name="frontend",
         )
 
