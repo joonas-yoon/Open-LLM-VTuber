@@ -42,7 +42,7 @@ class ChzzkAuth:
         """
         encoded_redirect = quote(redirect_uri, safe="")
         return (
-            f"{self.CHZZK_AUTH_URL}"
+            f"{CHZZK_AUTH_URL}"
             f"?response_type=code"
             f"&clientId={self.client_id}"
             f"&redirectUri={encoded_redirect}"

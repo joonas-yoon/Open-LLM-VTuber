@@ -38,11 +38,12 @@ dependencies = [
     "tqdm>=4.67.1",
     "uvicorn[standard]>=0.33.0",
     "websocket-client>=1.8.0",
-    "letta-client>=0.1.100",
+    "letta-client==1.6.5",
     "duckduckgo-mcp-server>=0.1.1",
-    "websockets>=14.1",
+    "websockets==14.1",
     "aiohttp>=3.13.2",
     "dotenv>=0.9.9",
+    "python-socketio==4.6.1",
 ]
 
 [project.optional-dependencies]

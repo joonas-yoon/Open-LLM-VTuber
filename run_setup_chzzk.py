@@ -11,15 +11,12 @@ import threading
 from urllib.parse import urlparse, parse_qs
 from loguru import logger
 
-from src.chzzk.Auth import ChzzkAuth, CallbackHandler
-
-# Load environment variables
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.chzzk.env'))
+from src.chzzk import CLIENT_ID, CLIENT_SECRET
+from src.chzzk.auth import ChzzkAuth, CallbackHandler
+from src.chzzk.sockets import connect_socket
 
 
 def authenticate_chzzk():
-    CLIENT_ID = os.getenv("CLIENT_ID")
-    CLIENT_SECRET = os.getenv("CLIENT_SECRET")
     RECV_HOST = "localhost"
     RECV_PORT = 8080
     RECV_URL = f"http://{RECV_HOST}:{RECV_PORT}"
@@ -71,8 +68,8 @@ def authenticate_chzzk():
 
 
 async def main():
-    code, state = authenticate_chzzk()
-    logger.info(f"{code} {state}")
+    # code, state = authenticate_chzzk()
+    await connect_socket()
     pass
 
 if __name__ == "__main__":
