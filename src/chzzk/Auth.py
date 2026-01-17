@@ -1,9 +1,14 @@
 """Chzzk authentication module for OAuth2 token handling."""
+import httpx
+import threading
 
 from urllib.parse import quote
-
-import httpx
+from http.server import BaseHTTPRequestHandler
+from urllib.parse import urlparse, parse_qs
 from loguru import logger
+
+CHZZK_AUTH_URL = "https://chzzk.naver.com/account-interlock"
+CHZZK_API_URL = "https://openapi.chzzk.naver.com"
 
 
 class ChzzkAuth:
@@ -13,9 +18,7 @@ class ChzzkAuth:
         client_id: OAuth2 client ID.
         client_secret: OAuth2 client secret.
     """
-
-    NAVER_AUTH_URL = "https://chzzk.naver.com/account-interlock"
-    NAVER_TOKEN_URL = "https://openapi.chzzk.naver.com/auth/v1/token"
+    CHZZK_TOKEN_URL = f"{CHZZK_API_URL}/auth/v1/token"
 
     def __init__(self, client_id: str, client_secret: str) -> None:
         """Initialize Chzzk authentication handler.
@@ -39,7 +42,7 @@ class ChzzkAuth:
         """
         encoded_redirect = quote(redirect_uri, safe="")
         return (
-            f"{self.NAVER_AUTH_URL}"
+            f"{self.CHZZK_AUTH_URL}"
             f"?response_type=code"
             f"&clientId={self.client_id}"
             f"&redirectUri={encoded_redirect}"
@@ -76,7 +79,7 @@ class ChzzkAuth:
 
         try:
             response = httpx.post(
-                self.NAVER_TOKEN_URL, headers=headers, json=data, timeout=10.0
+                self.CHZZK_TOKEN_URL, headers=headers, json=data, timeout=10.0
             )
             response.raise_for_status()
             return response.json()
@@ -88,3 +91,34 @@ class ChzzkAuth:
             error_msg = f"Request error: {e}"
             logger.error(error_msg)
             return error_msg
+
+
+class CallbackHandler(BaseHTTPRequestHandler):
+    response_queue = None
+
+    def do_GET(self):
+        if self.path.startswith("/callback"):
+            query_params = parse_qs(urlparse(self.path).query)
+            code = query_params.get("code", [None])[0]
+            state = query_params.get("state", [None])[0]
+
+            print(f"✓ Callback received: code={code}, state={state}")
+
+            # Put the code and state into the queue
+            if self.response_queue:
+                self.response_queue.put((code, state))
+
+            self.send_response(200)
+            self.send_header("Content-type", "text/html; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(b"<html><body>"
+                             b"<h1>Authorization successful!</h1>"
+                             b"<p>You can close this window.</p>"
+                             b"</body></html>")
+
+            # Stop the server
+            threading.Thread(target=self.server.shutdown,
+                             daemon=True).start()
+        else:
+            self.send_response(404)
+            self.end_headers()
