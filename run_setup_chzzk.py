@@ -66,7 +66,7 @@ async def start():
     auth = ChzzkAuth(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI)
     code, state = authenticate_chzzk(auth)
     client = ChzzkClient(auth, code, state)
-    await client.connect()
+    await client.start()
 
 
 if __name__ == "__main__":

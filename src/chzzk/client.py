@@ -1,5 +1,7 @@
 
 import json
+import threading
+import time
 import requests
 import socketio
 
@@ -7,6 +9,7 @@ from pydantic import BaseModel
 from typing import Dict, List, Literal, Any, Optional
 from loguru import logger
 
+from . import message_queue as MessageQueue
 from .auth import ChzzkAuth, CHZZK_API_URL
 
 
@@ -33,7 +36,7 @@ class ChzzkClient:
         self.code = code
         self.state = state
 
-    async def connect(self):
+    async def start(self):
         auth: ChzzkAuth = self.auth
         headers = {
             "Client-Id": auth.client_id,
@@ -43,7 +46,6 @@ class ChzzkClient:
 
         response = requests.get(
             f"{CHZZK_API_URL}/open/v1/sessions/auth/client", headers=headers)
-        print(response.status_code)
         response_json = response.json()
 
         try:
@@ -91,14 +93,24 @@ class ChzzkClient:
             logger.info(f"Received CHAT event: {data}")
             self.on_chat_received(ChatEventData(**json.loads(data)))
 
+        # call interval polling in a separate thread
+        polling_thread = threading.Thread(
+            target=self.interval_polling, daemon=True)
+        polling_thread.start()
+
         # hold the connection
-        await sio.wait()
+        try:
+            await sio.wait()
+        finally:
+            polling_thread.join()
+            sio.disconnect()
 
     # =================== Callback Handlers ===================
 
     def on_connected(self, session_key: str):
-        logger.info(f"Connected to session: {session_key}")
+        MessageQueue.create_queue()
         # Subscribe to events
+        logger.info(f"Connected to session: {session_key}")
         access_token = self.auth.get_access_token(self.code, self.state)
         headers = {
             "Authorization": f"Bearer {access_token}",
@@ -129,9 +141,20 @@ class ChzzkClient:
         logger.info(f"Chat received callback: {data}")
         message = data.content
         sender = data.profile.nickname if data.profile else ""
+        if sender and message:
+            MessageQueue.push({"sender": sender, "message": message})
 
     def on_system_received(self, type: str, data: Any):
         logger.info(f"System received callback: type={type}, data={data}")
 
     def on_error(self, error: Exception):
         logger.error(f"Error callback: {error}")
+
+    def interval_polling(self):
+        """Polling to fetch messages from the queue."""
+        while True:
+            logger.info(f"Polling")
+            if not MessageQueue.is_empty():
+                messages = MessageQueue.poll()
+                logger.info(f"Polled message: {messages}")
+            time.sleep(30)  # Poll every 30 seconds
