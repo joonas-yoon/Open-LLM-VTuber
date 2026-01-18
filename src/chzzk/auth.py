@@ -20,7 +20,7 @@ class ChzzkAuth:
     """
     CHZZK_TOKEN_URL = f"{CHZZK_API_URL}/auth/v1/token"
 
-    def __init__(self, client_id: str, client_secret: str) -> None:
+    def __init__(self, client_id: str, client_secret: str, redirect_uri: str) -> None:
         """Initialize Chzzk authentication handler.
 
         Args:
@@ -29,18 +29,20 @@ class ChzzkAuth:
         """
         self.client_id = client_id
         self.client_secret = client_secret
+        self.redirect_uri = redirect_uri
+        self.access_token = None
+        self.refresh_token = None
 
-    def get_auth_url(self, redirect_uri: str, state: str) -> str:
+    def get_auth_url(self, state: str) -> str:
         """Generate OAuth2 authorization URL.
 
         Args:
-            redirect_uri: Redirect URI for OAuth2 callback.
             state: State parameter for CSRF protection.
 
         Returns:
             Authorization URL for user redirect.
         """
-        encoded_redirect = quote(redirect_uri, safe="")
+        encoded_redirect = quote(self.redirect_uri, safe="")
         return (
             f"{CHZZK_AUTH_URL}"
             f"?response_type=code"
@@ -49,9 +51,7 @@ class ChzzkAuth:
             f"&state={state}"
         )
 
-    def get_access_token(
-        self, code: str, state: str, redirect_uri: str
-    ) -> dict | str:
+    def get_auth_tokens(self, code: str, state: str) -> dict | str:
         """Exchange authorization code for access token.
 
         Args:
@@ -74,7 +74,7 @@ class ChzzkAuth:
             "clientSecret": self.client_secret,
             "code": code,
             "state": state,
-            "redirectUri": redirect_uri,
+            "redirectUri": self.redirect_uri,
         }
 
         try:
@@ -91,6 +91,30 @@ class ChzzkAuth:
             error_msg = f"Request error: {e}"
             logger.error(error_msg)
             return error_msg
+
+    def get_access_token(self, code: str, state: str) -> dict | str:
+        """Exchange authorization code for access token.
+
+        Args:
+            code: Authorization code from OAuth2 callback.
+            state: State parameter from OAuth2 callback.
+
+        Returns:
+            Token response dictionary on success, or error message string on failure.
+        """
+        if self.access_token != None:
+            # TODO: Check token expiration and refresh if needed
+            return self.access_token
+        
+        token_response = self.get_auth_tokens(code, state)
+        logger.debug(f"Access Token Response: {token_response}")
+        try:
+            token_content = token_response['content']
+            self.access_token = token_content['accessToken']
+            self.refresh_token = token_content['refreshToken']
+        except Exception as e:
+            logger.error(f"Failed to get access token: {e}")
+        return self.access_token
 
 
 class CallbackHandler(BaseHTTPRequestHandler):
@@ -122,3 +146,4 @@ class CallbackHandler(BaseHTTPRequestHandler):
         else:
             self.send_response(404)
             self.end_headers()
+

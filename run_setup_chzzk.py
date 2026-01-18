@@ -1,34 +1,29 @@
 import webbrowser
 import secrets
 import asyncio
-import os
 import queue
 import time
 
-from dotenv import load_dotenv
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import HTTPServer
 import threading
-from urllib.parse import urlparse, parse_qs
 from loguru import logger
 
 from src.chzzk import CLIENT_ID, CLIENT_SECRET
 from src.chzzk.auth import ChzzkAuth, CallbackHandler
-from src.chzzk.sockets import connect_socket
+from src.chzzk.client import ChzzkClient
+
+RECV_HOST = "localhost"
+RECV_PORT = 8080
+RECV_URL = f"http://{RECV_HOST}:{RECV_PORT}"
+REDIRECT_URI = f"{RECV_URL}/callback"
 
 
-def authenticate_chzzk():
-    RECV_HOST = "localhost"
-    RECV_PORT = 8080
-    RECV_URL = f"http://{RECV_HOST}:{RECV_PORT}"
-    REDIRECT_URI = f"{RECV_URL}/callback"
-    logger.info(f"Expected REDIRECT_URI: {REDIRECT_URI}")
+def authenticate_chzzk(auth: ChzzkAuth):
     temporal_state = secrets.token_urlsafe(16)
-
-    auth = ChzzkAuth(CLIENT_ID, CLIENT_SECRET)
 
     q = queue.Queue()
     server = HTTPServer((RECV_HOST, RECV_PORT), CallbackHandler)
-    CallbackHandler.response_queue = q  # 큐 설정
+    CallbackHandler.response_queue = q
     server_thread = threading.Thread(target=server.serve_forever, daemon=True)
     server_thread.start()
 
@@ -36,7 +31,7 @@ def authenticate_chzzk():
 
     def open_browser():
         time.sleep(1)
-        auth_url = auth.get_auth_url(REDIRECT_URI, temporal_state)
+        auth_url = auth.get_auth_url(temporal_state)
         webbrowser.open(auth_url)
 
     logger.info("Opening web browser for user authentication in 1 second...")
@@ -67,10 +62,12 @@ def authenticate_chzzk():
         server.shutdown()
 
 
-async def main():
-    # code, state = authenticate_chzzk()
-    await connect_socket()
-    pass
+async def start():
+    auth = ChzzkAuth(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI)
+    code, state = authenticate_chzzk(auth)
+    client = ChzzkClient(auth, code, state)
+    await client.connect()
+
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(start())
