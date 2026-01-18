@@ -3,9 +3,28 @@ import json
 import requests
 import socketio
 
+from pydantic import BaseModel
+from typing import Dict, List, Literal, Any, Optional
 from loguru import logger
 
 from .auth import ChzzkAuth, CHZZK_API_URL
+
+
+class ChatEventDataProfile(BaseModel):
+    nickname: str
+    verifiedMark: bool
+    badges: List[Dict[str, Any]]
+    userRoleCode: str
+
+
+class ChatEventData(BaseModel):
+    channelId: str
+    senderChannelId: str
+    content: str
+    profile: Optional[ChatEventDataProfile]
+    emojis: Dict[str, Any]
+    messageTime: int
+    eventSentAt: str
 
 
 class ChzzkClient:
@@ -36,9 +55,9 @@ class ChzzkClient:
             return
 
         sio = socketio.Client(reconnection=False,
-                            reconnection_attempts=2,
-                            logger=True,
-                            engineio_logger=True)
+                              reconnection_attempts=2,
+                              logger=True,
+                              engineio_logger=True)
         sio.connect(url, transports=['websocket'])
 
         @sio.event
@@ -57,16 +76,10 @@ class ChzzkClient:
                 if type == 'connected':
                     session_key = data['sessionKey']
                     self.on_connected(session_key)
-                elif type == 'subscribed':
-                    # eventType: "CHAT"|"DONATION"
+                elif type == 'subscribed' or type == 'unsubscribed':
                     eventType, channelId = data['eventType'], data['channelId']
-                    logger.info(
-                        f"Subscribed to session: eventType={eventType}, channelId={channelId}")
-                elif type == 'unsubscribed':
-                    # eventType: "CHAT"|"DONATION"
-                    eventType, channelId = data['eventType'], data['channelId']
-                    logger.info(
-                        f"Unsubscribed from session: eventType={eventType}, channelId={channelId}")
+                    is_subscribe = (type == 'subscribed')
+                    self.on_subsribe_event(eventType, channelId, is_subscribe)
             except Exception as e:
                 self.on_error(e)
                 return
@@ -74,14 +87,16 @@ class ChzzkClient:
             self.on_system_received(type, data)
 
         @sio.on('CHAT')
-        def on_chat(data):
+        def on_chat(data: str):
             logger.info(f"Received CHAT event: {data}")
-            self.on_chat_received(data)
+            self.on_chat_received(ChatEventData(**json.loads(data)))
 
         # hold the connection
         await sio.wait()
 
-    def on_connected(self, session_key):
+    # =================== Callback Handlers ===================
+
+    def on_connected(self, session_key: str):
         logger.info(f"Connected to session: {session_key}")
         # Subscribe to events
         access_token = self.auth.get_access_token(self.code, self.state)
@@ -99,12 +114,24 @@ class ChzzkClient:
         logger.info(
             f"Subscribed to chat events: {response.status_code}, {response.text}")
 
-    def on_chat_received(self, data):
+    def on_subsribe_event(
+            self,
+            eventType: Literal["CHAT", "DONATION"],
+            channelId: str,
+            is_subscribe: bool
+    ):
+        if is_subscribe:
+            logger.info(f"Subscribed {eventType} to channelId={channelId}")
+        else:
+            logger.info(f"Unsubscribed {eventType} from channelId={channelId}")
+
+    def on_chat_received(self, data: ChatEventData):
         logger.info(f"Chat received callback: {data}")
+        message = data.content
+        sender = data.profile.nickname if data.profile else ""
 
-    def on_system_received(self, type, data):
+    def on_system_received(self, type: str, data: Any):
         logger.info(f"System received callback: type={type}, data={data}")
-    
-    def on_error(self, error):
-        logger.error(f"Error callback: {error}")
 
+    def on_error(self, error: Exception):
+        logger.error(f"Error callback: {error}")
