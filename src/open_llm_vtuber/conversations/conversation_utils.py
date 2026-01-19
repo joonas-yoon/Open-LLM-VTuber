@@ -140,7 +140,7 @@ async def send_conversation_start_signals(websocket_send: WebSocketSend) -> None
             }
         )
     )
-    await websocket_send(json.dumps({"type": "full-text", "text": "Thinking..."}))
+    await websocket_send(json.dumps({"type": "full-text", "text": "..."}))
 
 
 async def process_user_input(
@@ -166,9 +166,14 @@ async def finalize_conversation_turn(
     broadcast_ctx: Optional[BroadcastContext] = None,
 ) -> None:
     """Finalize a conversation turn"""
+    logger.debug("Finalizing conversation turn...")
+    logger.debug(f"TTS Manager task list: {tts_manager.task_list}")
+
     if tts_manager.task_list:
         await asyncio.gather(*tts_manager.task_list)
         await websocket_send(json.dumps({"type": "backend-synth-complete"}))
+        
+        logger.debug("Waiting for frontend playback completion...")
 
         response = await message_handler.wait_for_response(
             client_uid, "frontend-playback-complete"
@@ -177,6 +182,8 @@ async def finalize_conversation_turn(
         if not response:
             logger.warning(f"No playback completion response from {client_uid}")
             return
+        
+    logger.debug("Sending force-new-message signal...")
 
     await websocket_send(json.dumps({"type": "force-new-message"}))
 
@@ -200,6 +207,8 @@ async def send_conversation_end_signal(
         "type": "control",
         "text": "conversation-chain-end",
     }
+
+    logger.debug(f"sending conversation end signal: {chain_end_msg}")
 
     await websocket_send(json.dumps(chain_end_msg))
 
