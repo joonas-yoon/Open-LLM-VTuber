@@ -93,16 +93,10 @@ class ChzzkClient:
             logger.info(f"Received CHAT event: {data}")
             self.on_chat_received(ChatEventData(**json.loads(data)))
 
-        # call interval polling in a separate thread
-        polling_thread = threading.Thread(
-            target=self.interval_polling, daemon=True)
-        polling_thread.start()
-
         # hold the connection
         try:
             await sio.wait()
         finally:
-            polling_thread.join()
             sio.disconnect()
 
     # =================== Callback Handlers ===================
@@ -149,12 +143,3 @@ class ChzzkClient:
 
     def on_error(self, error: Exception):
         logger.error(f"Error callback: {error}")
-
-    def interval_polling(self):
-        """Polling to fetch messages from the queue."""
-        while True:
-            logger.info(f"Polling")
-            if not MessageQueue.is_empty():
-                messages = MessageQueue.poll()
-                logger.info(f"Polled message: {messages}")
-            time.sleep(30)  # Poll every 30 seconds

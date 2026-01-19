@@ -10,6 +10,7 @@ from loguru import logger
 from .service_context import ServiceContext
 from .websocket_handler import WebSocketHandler
 from .proxy_handler import ProxyHandler
+from ..chzzk import message_queue as MessageQueue
 
 
 def init_client_ws_route(default_context_cache: ServiceContext) -> APIRouter:
@@ -250,5 +251,27 @@ def init_webtool_routes(default_context_cache: ServiceContext) -> APIRouter:
         except Exception as e:
             logger.error(f"Error in TTS WebSocket connection: {e}")
             await websocket.close()
+
+    return router
+
+
+def init_chzzk_route() -> APIRouter:
+    """
+    Create and return API routes for handling chizzik connections.
+
+    Returns:
+        APIRouter: Configured router with proxy WebSocket endpoint
+    """
+    router = APIRouter()
+
+    @router.post("/chat/poll")
+    async def poll_chat():
+        """Endpoint for polling chat messages from chizzik"""
+        if MessageQueue.is_empty():
+            # TODO: implements self talking or other features when no messages are present
+            return JSONResponse({"messages": []})
+        
+        messages = MessageQueue.poll(batch_size=100)
+        return JSONResponse({"messages": messages})
 
     return router
